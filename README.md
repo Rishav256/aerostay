@@ -1,2 +1,1 @@
-# aerostay
-Full-Stack Hospitality Management app
+Ankit Kumar @2024
