@@ -1,4 +1,4 @@
-# AeroStay ✈️
+# AeroStay 
 
 A full-stack Hospitality Management App built with the MERN stack — browse accommodations, view listings, make bookings, and manage your own properties.
 
