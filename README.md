@@ -1,61 +1,84 @@
-# AeroStay 
+# AeroStay
 
-A full-stack Hospitality Management App built with the MERN stack — browse accommodations, view listings, make bookings, and manage your own properties.
+A full-stack hospitality booking platform built with the MERN stack, 
+containerized with Docker, and deployed on AWS EC2 with Nginx and a 
+GitHub Actions CI/CD pipeline. Browse accommodations, manage listings, 
+upload property photos, and make bookings — with JWT and Google OAuth 
+authentication.
+
+**Live Demo → [http://13.201.9.163.nip.io](http://13.201.9.163.nip.io)**
+
+---
+
+## Features
+
+- Browse and search property listings
+- JWT-based authentication + Google OAuth 2.0
+- Hosts can create, edit, and delete listings with photo uploads
+- Cloudinary-powered image storage (URL upload + local file upload)
+- Booking management for guests and hosts
+- Responsive UI with Tailwind CSS and shadcn/ui
 
 ---
 
 ## Tech Stack
 
-- **Frontend** — React.js (Vite), Tailwind CSS
-- **Backend** — Node.js, Express.js
-- **Database** — MongoDB (Atlas)
-- **Auth** — JWT, Google OAuth 2.0
-- **Media** — Cloudinary
+| Layer | Technology |
+|---|---|
+| Frontend | React 18 (Vite), Tailwind CSS, shadcn/ui, Axios |
+| Backend | Node.js, Express.js |
+| Database | MongoDB Atlas |
+| Auth | JWT, cookie-session, Google OAuth 2.0 (@react-oauth/google) |
+| Media | Cloudinary |
+| Deployment | AWS EC2 (t3.micro, ap-south-1), Docker, Nginx |
+| CI/CD | GitHub Actions — auto build, push to Docker Hub, deploy to EC2 on push to main |
 
 ---
 
-## Prerequisites
+## Architecture
 
-Make sure you have the following installed:
+```
+Client (React/Vite)
+    │
+    ▼
+Nginx (reverse proxy on EC2)
+    ├── /          → aerostay-client container (port 3000)
+    └── /api/      → aerostay-api container (port 8000)
+                            │
+                            ├── MongoDB Atlas
+                            └── Cloudinary
+```
 
-- [Node.js](https://nodejs.org/) (v18+)
-- [Yarn](https://yarnpkg.com/)
-- [Git](https://git-scm.com/)
+Both services run as Docker containers on a single EC2 instance.  
+GitHub Actions builds fresh images on every push to `main`, pushes them to Docker Hub, and redeploys on the server via SSH — zero downtime rolling update.
 
 ---
 
-## Getting Started
+## Local Development
+
+### Prerequisites
+- Node.js v18+
+- Yarn
+- Git
 
 ### 1. Clone the repository
-
 ```bash
 git clone https://github.com/Rishav256/aerostay.git
 cd aerostay
 ```
 
 ### 2. Install dependencies
-
 ```bash
-# Frontend
-cd client
-yarn install
-
 # Backend
-cd ../api
-yarn install
+cd api && yarn install
+
+# Frontend
+cd ../client && yarn install
 ```
 
 ### 3. Set up environment variables
 
-#### `client/.env`
-
-```env
-VITE_BASE_URL=http://localhost:4000
-VITE_GOOGLE_CLIENT_ID=your_google_client_id
-```
-
 #### `api/.env`
-
 ```env
 PORT=4000
 DB_URL=your_mongodb_connection_string
@@ -69,71 +92,76 @@ CLOUDINARY_API_SECRET=your_cloudinary_api_secret
 CLIENT_URL=http://localhost:5173
 ```
 
-> See the section below for how to obtain each value.
-
-### 4. Run the project
-
-```bash
-# In one terminal — start the backend
-cd api
-yarn start
-
-# In another terminal — start the frontend
-cd client
-yarn run dev
+#### `client/.env`
+```env
+VITE_BASE_URL=http://localhost:4000
+VITE_GOOGLE_CLIENT_ID=your_google_client_id
 ```
 
-Frontend runs at `http://localhost:5173`  
-Backend runs at `http://localhost:4000`
+<details>
+<summary>How to obtain each value</summary>
 
----
+**VITE_GOOGLE_CLIENT_ID**
+1. [Google Cloud Console](https://console.cloud.google.com) → APIs & Services → Credentials
+2. Create OAuth 2.0 Client ID (Web application)
+3. Add `http://localhost:5173` to Authorized JavaScript Origins
+4. Copy the Client ID
 
-## Obtaining Environment Variables
+**DB_URL**
+1. [MongoDB Atlas](https://www.mongodb.com/cloud/atlas) → Create free cluster
+2. Connect → Drivers → copy connection string
+3. Replace credentials and append your DB name: `.../aerostay`
 
-### `VITE_GOOGLE_CLIENT_ID`
-1. Go to [Google Cloud Console](https://console.cloud.google.com)
-2. Create a project → **APIs & Services** → **OAuth consent screen** → configure it
-3. Go to **Credentials** → **Create Credentials** → **OAuth 2.0 Client ID**
-4. Set Application type to **Web application**
-5. Add `http://localhost:5173` to both Authorized JavaScript Origins and Redirect URIs
-6. Copy the generated Client ID
-
-### `DB_URL`
-1. Sign up at [MongoDB Atlas](https://www.mongodb.com/cloud/atlas)
-2. Create a free cluster
-3. Go to **Connect** → **Drivers** → copy the connection string
-4. Replace `<username>` and `<password>` with your Atlas credentials
-5. Append your database name: `.../aerostay`
-
-### `JWT_SECRET` & `SESSION_SECRET`
-Generate secure random strings using Node.js:
+**JWT_SECRET & SESSION_SECRET**
 ```bash
 node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 ```
-Run twice — use one value for each secret.
+Run twice, use one value for each.
 
-### Cloudinary Keys
-1. Sign up at [Cloudinary](https://cloudinary.com)
-2. Go to **Settings** → **API Keys**
-3. Your Cloud name, API Key, and API Secret are all listed there
+**Cloudinary Keys**  
+[Cloudinary](https://cloudinary.com) → Settings → API Keys
+
+</details>
+
+### 4. Run locally
+```bash
+# Terminal 1 — backend
+cd api && yarn start
+
+# Terminal 2 — frontend
+cd client && yarn dev
+```
+
+Frontend → `http://localhost:5173`  
+Backend → `http://localhost:4000`
 
 ---
 
-## Folder Structure
+## Deployment
 
-.env files should be properly located
+The app is containerized with Docker and deployed on AWS EC2.
 
+- **API** — `node:22-alpine` image, Express server
+- **Client** — multi-stage build: `node:22-alpine` compiles the Vite app, `nginx:alpine` serves the static output
+- **Nginx** — reverse proxies frontend and backend on a single server
+
+GitHub Actions workflow (`.github/workflows/cicd.yml`) triggers on every push to `main`:
+1. Builds and pushes both Docker images to Docker Hub
+2. SSHs into EC2, pulls latest images, restarts containers
+
+### Folder Structure
 ```
 aerostay/
-├── client/       # React frontend (Vite)
-│   └── .env
-├── api/          # Express backend
-│   └── .env
+├── .github/
+│   └── workflows/
+│       └── cicd.yml        # CI/CD pipeline
+├── api/                    # Express backend
+│   ├── Dockerfile
+│   ├── .dockerignore
+│   └── .env                # not committed
+├── client/                 # React frontend (Vite)
+│   ├── Dockerfile
+│   ├── .dockerignore
+│   └── .env                # not committed
 └── README.md
 ```
-
----
-
-
-## A personal project by Rishav256
-## :)
